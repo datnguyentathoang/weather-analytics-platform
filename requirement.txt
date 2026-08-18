@@ -1,4 +1,4 @@
-# --- Biến đổi & Kho dữ liệu (Phần của Thành An) ---
+# --- Biến đổi & Kho dữ liệu (Phần của Thanh An) ---
 psycopg2-binary==2.9.9
 sqlalchemy==2.0.25
 pyarrow==14.0.1
