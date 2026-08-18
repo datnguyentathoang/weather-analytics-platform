@@ -1,0 +1,51 @@
+graph TD
+    classDef dat fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1;
+    classDef thien fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20;
+    classDef thanhan fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
+    classDef khanh fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C;
+    classDef orch fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C;
+    classDef db fill:#ECEFF1,stroke:#37474F,stroke-width:2px,color:#263238;
+
+    subgraph DATA_SOURCES ["1. Nguồn Dữ Liệu - ĐẠT"]
+        A["Dataset NOAA / Kaggle"] -->|"80% Batch"| B("Dữ liệu Lịch sử")
+        A -->|"20% Stream"| C("Dữ liệu Realtime")
+        B -->|"ingest_batch.py"| D["MinIO: weather-raw"]
+        C -->|"kafka_producer.py"| E["Apache Kafka"]
+    end
+
+    subgraph PROCESSING_LAYER ["2. Xử Lý Dữ Liệu - THIÊN"]
+        D -->|"batch_clean.py"| F["PySpark Batch"]
+        E -->|"streaming_alert.py"| G["Spark Streaming"]
+        F -->|"Parquet"| H["MinIO: weather-processed"]
+        G -->|"Realtime Alert"| I["Cảnh báo & Log lỗi"]
+    end
+
+    subgraph ORCHESTRATION ["Điều Phối - THIÊN & ĐẠT"]
+        J["Airflow DAG"]
+    end
+
+    subgraph WAREHOUSE_LAYER ["3. Kho Dữ Liệu - THÀNH AN"]
+        H --> K[("PostgreSQL DW")]
+        
+        subgraph dbt_project ["Thư mục dbt_project"]
+            K --> L["Staging Views 1:1"]
+            L --> M["Marts Tables"]
+            M -->|"dbt test"| K
+        end
+    end
+
+    subgraph ANALYTICS_AI ["4. Ứng Dụng Cuối - KHANH"]
+        K --> N["Metabase Dashboard"]
+        K --> O["Mô hình Prophet AI"]
+        O -->|"Dự báo"| N
+    end
+
+    J ==>|"Trigger Batch"| F
+    J ==>|"Trigger Daily"| K
+
+    class DATA_SOURCES dat;
+    class PROCESSING_LAYER thien;
+    class WAREHOUSE_LAYER thanhan;
+    class ANALYTICS_AI khanh;
+    class ORCHESTRATION orch;
+    class K,D,H,E,N,O,A,B,C,F,G,I,J,L,M db;
