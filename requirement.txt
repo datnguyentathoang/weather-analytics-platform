@@ -1,0 +1,7 @@
+# --- Biến đổi & Kho dữ liệu (Phần của Thành An) ---
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
+pyarrow==14.0.1
+pandas==2.2.2
+dbt-core==1.7.0
+dbt-postgres==1.7.0
