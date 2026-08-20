@@ -1,7 +1,25 @@
-# --- Biến đổi & Kho dữ liệu (Phần của Thanh An) ---
-psycopg2-binary==2.9.9
-sqlalchemy==2.0.25
-pyarrow==14.0.1
-pandas==2.2.2
-dbt-core==1.7.0
-dbt-postgres==1.7.0
+# PySpark & Streaming
+pyspark>=3.4.0,<3.6.0
+kafka-python>=2.0.2
+
+# Data Lake & Object Storage (MinIO / S3)
+minio>=7.2.0
+boto3>=1.34.0
+
+# Data Warehouse & Database
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.0
+
+# Transformation & Data Quality (dbt)
+dbt-core>=1.7.0
+dbt-postgres>=1.7.0
+
+# AI/ML & Time-Series Forecasting
+prophet>=1.1.5
+pandas>=2.0.0,<2.2.0
+numpy>=1.24.0
+matplotlib>=3.8.0
+
+# Data Ingestion & Utilities
+requests>=2.31.0
+python-dotenv>=1.0.0
