@@ -1,51 +1,75 @@
-graph TD
-    classDef dat fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1;
-    classDef thien fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20;
-    classDef thanhan fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
-    classDef khanh fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C;
-    classDef orch fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C;
-    classDef db fill:#ECEFF1,stroke:#37474F,stroke-width:2px,color:#263238;
+flowchart TD
+    classDef source fill:#e7f1ff,stroke:#2563eb,stroke-width:2px,color:#172554;
+    classDef process fill:#e9f8ef,stroke:#198754,stroke-width:2px,color:#164e2b;
+    classDef storage fill:#fff4df,stroke:#d97706,stroke-width:2px,color:#78350f;
+    classDef warehouse fill:#eef2f4,stroke:#475569,stroke-width:2px,color:#1e293b;
+    classDef analytics fill:#fcefe8,stroke:#c2410c,stroke-width:2px,color:#7c2d12;
+    classDef orchestration fill:#f4edff,stroke:#7c3aed,stroke-width:2px,color:#4c1d95;
+    classDef note fill:#fff,stroke:#64748b,stroke-width:1px,stroke-dasharray:5 5,color:#334155;
 
-    subgraph DATA_SOURCES ["1. Nguồn Dữ Liệu - ĐẠT"]
-        A["Dataset NOAA / Kaggle"] -->|"80% Batch"| B("Dữ liệu Lịch sử")
-        A -->|"20% Stream"| C("Dữ liệu Realtime")
-        B -->|"ingest_batch.py"| D["MinIO: weather-raw"]
-        C -->|"kafka_producer.py"| E["Apache Kafka"]
+    subgraph SOURCES["1. Sources"]
+        API["Open-Meteo API"]:::source
+        GENERATOR["crawl_data.py\nOffline historical generator"]:::source
+        RAWJSON["data_sample/CITY_*_raw.json\nHourly JSON"]:::storage
+        API -.-> GENERATOR
+        GENERATOR --> RAWJSON
     end
 
-    subgraph PROCESSING_LAYER ["2. Xử Lý Dữ Liệu - THIÊN"]
-        D -->|"batch_clean.py"| F["PySpark Batch"]
-        E -->|"streaming_alert.py"| G["Spark Streaming"]
-        F -->|"Parquet"| H["MinIO: weather-processed"]
-        G -->|"Realtime Alert"| I["Cảnh báo & Log lỗi"]
+    subgraph BATCH["2. Batch ingestion and processing"]
+        INGEST["ingest_batch.py\nJSON to CSV"]:::process
+        RAWCSV["D:\\weather_datalake\\weather-raw\\batch\nRaw CSV files"]:::storage
+        CLEAN["spark/jobs/batch_clean.py\nPandas + local Spark\nnull filling and partitions"]:::process
+        PARQUET["D:\\weather_datalake\\weather-processed\\curated_weather\nSnappy Parquet partitioned by obs_date, region"]:::storage
+        RAWJSON --> INGEST --> RAWCSV --> CLEAN --> PARQUET
     end
 
-    subgraph ORCHESTRATION ["Điều Phối - THIÊN & ĐẠT"]
-        J["Airflow DAG"]
+    subgraph STREAM["3. Realtime path"]
+        PRODUCER["scripts/kafka_producer.py\nKafka producer"]:::process
+        KAFKA[("Apache Kafka\nweather_realtime")]:::storage
+        ALERT["spark/jobs/streaming_alert.py\nSimulated streaming monitor"]:::process
+        ALERTS["Extreme-weather alert\nconsole output"]:::analytics
+        API -.-> PRODUCER --> KAFKA -.-> ALERT --> ALERTS
     end
 
-    subgraph WAREHOUSE_LAYER ["3. Kho Dữ Liệu - THÀNH AN"]
-        H --> K[("PostgreSQL DW")]
-        
-        subgraph dbt_project ["Thư mục dbt_project"]
-            K --> L["Staging Views 1:1"]
-            L --> M["Marts Tables"]
-            M -->|"dbt test"| K
-        end
+    subgraph ORCH["4. Orchestration"]
+        AIRFLOW["Airflow DAG\nweather_analytics_pipeline"]:::orchestration
+        AIRFLOW -->|"crawl_api_data"| GENERATOR
+        AIRFLOW -->|"ingest_batch_to_datalake"| INGEST
+        AIRFLOW -->|"pyspark_batch_cleaning"| CLEAN
     end
 
-    subgraph ANALYTICS_AI ["4. Ứng Dụng Cuối - KHANH"]
-        K --> N["Metabase Dashboard"]
-        K --> O["Mô hình Prophet AI"]
-        O -->|"Dự báo"| N
+    subgraph WAREHOUSE["5. Warehouse and transformation"]
+        LOAD["load_parquet_to_postgres.py\nRead curated Parquet"]:::process
+        STAGING[("PostgreSQL\npublic.staging_weather")]:::warehouse
+        DBT["dbt models/staging/stg_weather.sql\nNormalize legacy and current fields"]:::process
+        FACT[("fact_observation\nAnomaly flag: rain > 90 or temp > 38")]:::warehouse
+        DIM[("dim_station\nStation dimension")]:::warehouse
+        PARQUET --> LOAD --> STAGING --> DBT
+        DBT --> FACT
+        DBT --> DIM
     end
 
-    J ==>|"Trigger Batch"| F
-    J ==>|"Trigger Daily"| K
+    subgraph CONSUMERS["6. Analytics and BI"]
+        PROPHET["analytics_ai/forecast_temperature.py\nHanoi temperature\nProphet, 168 hours"]:::analytics
+        FALLBACK["RandomForest fallback\nwhen Prophet fails"]:::analytics
+        RESULTS["forecast_results.csv\nforecast plot PNG"]:::storage
+        METABASE["Metabase dashboard"]:::analytics
+        FACT --> PROPHET --> RESULTS
+        PROPHET -.-> FALLBACK
+        FACT --> METABASE
+        RESULTS --> METABASE
+    end
 
-    class DATA_SOURCES dat;
-    class PROCESSING_LAYER thien;
-    class WAREHOUSE_LAYER thanhan;
-    class ANALYTICS_AI khanh;
-    class ORCHESTRATION orch;
-    class K,D,H,E,N,O,A,B,C,F,G,I,J,L,M db;
+    subgraph INFRA["Provisioned by deployments/docker-compose.yml"]
+        MINIO["MinIO\nweather-raw bucket"]:::note
+        ZK["Zookeeper"]:::note
+        KAFKA_INFRA["Kafka container\nlocalhost:9092"]:::note
+        PG_INFRA["PostgreSQL 15\nweather_db"]:::note
+        MB_INFRA["Metabase container"]:::note
+        ZK --- KAFKA_INFRA
+    end
+
+    MINIO -. "Provisioned, not used by current Python batch scripts" .- RAWCSV
+    KAFKA_INFRA -. "Runtime service for producer" .- KAFKA
+    PG_INFRA -. "Runtime service for warehouse" .- STAGING
+    MB_INFRA -. "Runtime service for dashboard" .- METABASE
